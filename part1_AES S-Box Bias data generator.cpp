@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <algorithm>
 #include <bitset>
 #include <string>
@@ -147,16 +148,29 @@ int main(){
                         key+=('0' + output_idx_combination[l]);
                     }
                     // string bias_str = bias_calculated.to_string();
-                    const auto bias_value = bias_calculated.count();
-                    bias_mapping[key] = bias_value;
+                    // we use the value "256 - x" because the probability 0's is required
+                    const auto bias_value = 256 - bias_calculated.count();
+                    bias_mapping[key] = bias_calculated.to_string();
                     bias_count[bias_value] += 1;
                 } while(next_combination(output_idx_combination, output_idx_combination+j, output_idx_combination+8));
             } while (next_combination(input_idx_combination, input_idx_combination+i, input_idx_combination+8));
         }
     }
-    cout << "** bias_count ***" << endl;
+    cout << "*** ***" << endl;
+    cout << "bias_count" << endl;
     for(auto i: bias_count) {
-        cout << i.first << '=' << i.second << endl;
+        cout << setw(5) << i.first << "\t=\t" << i.second << endl;
+    }
+    cout << "*** ***" << endl;
+    cout << "bias value" << endl;
+    for(auto i: bias_count) {
+        cout << setw(15) << left << ((i.first - 128) / 256.0) << "\t=\t" << i.second << endl;
+    }
+    cout << "*** ***" << endl;
+    cout << "bias_mapping" << endl;
+    for(auto i: bias_mapping) {
+        const auto cnt = count(begin(i.second), end(i.second), '0');
+        cout << setw(16) << i.first << "\t=\t" << cnt << " OR " << ((cnt - 128) / 256.0) << " OR " << i.second << " OR " << endl;
     }
     return 0;
 }
