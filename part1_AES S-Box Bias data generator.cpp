@@ -77,45 +77,60 @@ bool next_combination(const Iterator first, Iterator k, const Iterator last)
 
 // The Least Significant Bit is at index 0
 // For Big-Endian format, the indexes will look like: {7, 6, 5, 4, 3, 2, 1, 0}
-inline bool test_bit(uint8_t num, uint_fast8_t bit) {
+template<typename T>
+inline bool test_bit(T num, uint_fast8_t bit) {
     return (num >> bit) & 1;
 }
 
 // The Most Significant Bit is at index 0
 // For Big-Endian format, the indexes will look like: {0, 1, 2, 3, 4, 5, 6, 7}
-inline bool test_bit_back(uint8_t num, uint_fast8_t bit) {
-    return (num >> (7 - bit)) & 1;
+template<typename T>
+inline bool test_bit_back(T num, uint_fast8_t bit, uint_fast8_t num_bits_len=-1) {
+    if (num_bits_len == -1) num_bits_len = 8 * sizeof(T);
+    return (num >> ((num_bits_len - 1) - bit)) & 1;
 }
 
+const int32_t N_BITS = 8;
+const int32_t N_SIZE = 1 << N_BITS;  // 256
+const int32_t N_SIZE_BY_2 = static_cast<float>(N_SIZE >> 1);  // 128
+
 int main(){
-    uint8_t aes_sbox[256] = {};
+    // Bias has two definitions
+    // 1. Bias = (Probability of getting 0) - 1/2
+    // 2. Bias = Number of occurrences of 0 in the XOR of input and output columns
+    uint8_t aes_sbox[N_SIZE] = {};
     initialize_aes_sbox(aes_sbox);
+
     cout << "AES S-Box is:" << endl;
     cout << hex;
-    for(int i = 0; i < 16; ++i) {
-        for(int j = 0; j < 16; ++j) {
+    for(int32_t i = 0; i < 16; ++i) {
+        for(int32_t j = 0; j < 16; ++j) {
             cout << static_cast<uint32_t>(aes_sbox[i * 16 + j]) << "\t";
         }
         cout << endl;
     }
     cout << dec;
 
-
-    bitset<256> sbox_input[8], sbox_output[8];
-    for(int i = 0; i < 256; ++i) {
-        for(int j = 0; j < 8; ++j) {
-            sbox_input[j].set(i, test_bit_back(i, j));
-            sbox_output[j].set(i, test_bit_back(aes_sbox[i], j));
+    bitset<N_SIZE> sbox_input[N_BITS], sbox_output[N_BITS];
+    for(int32_t i = 0; i < N_SIZE; ++i) {
+        for(int32_t j = 0; j < N_BITS; ++j) {
+            // cout << i << ", " << j << ", " 
+            //      << static_cast<int32_t>(aes_sbox[i]) << ", " 
+            //      << static_cast<int32_t>(test_bit_back(i, j, N_BITS)) << ", " 
+            //      << static_cast<int32_t>(test_bit_back(aes_sbox[i], j, N_BITS)) << endl;
+            sbox_input[j].set(i, test_bit_back(i, j, N_BITS));
+            sbox_output[j].set(i, test_bit_back(aes_sbox[i], j, N_BITS));
         }
     }
+
     cout << "AES S-Box Input and Output in binary:" << endl;
-    for(int i = 0; i < 256; ++i) {
+    for(int32_t i = 0; i < N_SIZE; ++i) {  // row -> i
         cout << "     ";
-        for(int j = 0; j < 8; ++j) {
+        for(int32_t j = 0; j < N_BITS; ++j) {  // input column -> j
             cout << ((sbox_input[j].test(i)==0) ? 0 : 1) << ' ';
         }
         cout << "---> ";
-        for(int j = 0; j < 8; ++j) {
+        for(int32_t j = 0; j < N_BITS; ++j) {  // output column -> j
             cout << ((sbox_output[j].test(i)==0) ? 0 : 1) << ' ';
         }
         cout << endl;
@@ -123,54 +138,67 @@ int main(){
     
     // Testing whether XOR can be directly used with a column or not ---> Yes, can be used :)
     // cout << (sbox_input[0] ^ sbox_input[1]) << endl;
-    int input_idx_combination[8], output_idx_combination[8];
-    bitset<256> bias_calculated;
+    int input_idx_combination[N_BITS], output_idx_combination[N_BITS];
+    bitset<N_SIZE> bias_calculated;
+
+    // Columns used ---> The bias string of 0's and 1's (i.e. the XOR of all the columns used)
     map<string, string> bias_mapping;
+    
+    // stores the mapping for (Number of Zeros in the XOR of the columns ---> Number of occurrences)
     map<int32_t, int32_t> bias_count;
-    for(int i = 1; i <= 8; ++i) {
-        for(int j = 1; j <= 8; ++j) {
+    for(int32_t i = 1; i <= N_BITS; ++i) {
+        for(int32_t j = 1; j <= N_BITS; ++j) {
             // Reset the Index Combination array
-            for(int k = 0; k < 8; ++k) {
+            for(int32_t k = 0; k < N_BITS; ++k) {
                 input_idx_combination[k] = output_idx_combination[k] = k;
             }
-            bias_calculated.reset();
+
+            // The columns of input and output which are to be used for bias calculation
+            // are based on the values stored in input_idx_combination and output_idx_combination
+            // at indices [0, i-1]   <-- both inclusive
 
             do {
                 do {
+                    bias_calculated.reset();
                     string key="", value="";
-                    for(int l = 0; l < i; ++l)  {
+                    for(int32_t l = 0; l < i; ++l)  {
                         bias_calculated ^= sbox_input[input_idx_combination[l]];
-                        key+=('0' + input_idx_combination[l]);
+                        key+="i" + to_string(input_idx_combination[l]) + " ";
+                        // "i" represents input column number
                     }
-                    key+=',';
-                    for(int l = 0; l < j; ++l){
+                    key+=", ";
+                    for(int32_t l = 0; l < j; ++l){
                         bias_calculated ^= sbox_output[output_idx_combination[l]];
-                        key+=('0' + output_idx_combination[l]);
+                        key+="o" + to_string(output_idx_combination[l]) + " ";
+                        // "o" represents output column number
                     }
-                    // string bias_str = bias_calculated.to_string();
-                    // we use the value "256 - x" because the probability 0's is required
-                    const auto bias_value = 256 - bias_calculated.count();
-                    bias_mapping[key] = bias_calculated.to_string();
+
+                    // we use the value "256 - x" because the probability of 0's is required
+                    const auto bias_value = N_SIZE - bias_calculated.count();
                     bias_count[bias_value] += 1;
-                } while(next_combination(output_idx_combination, output_idx_combination+j, output_idx_combination+8));
-            } while (next_combination(input_idx_combination, input_idx_combination+i, input_idx_combination+8));
+                    bias_mapping[key] = bias_calculated.to_string();
+                } while(next_combination(output_idx_combination, output_idx_combination+j, output_idx_combination+N_BITS));
+            } while (next_combination(input_idx_combination, input_idx_combination+i, input_idx_combination+N_BITS));
         }
     }
+
     cout << "*** ***" << endl;
     cout << "bias_count" << endl;
     for(auto i: bias_count) {
         cout << setw(5) << i.first << "\t=\t" << i.second << endl;
     }
+
     cout << "*** ***" << endl;
-    cout << "bias value" << endl;
+    cout << "bias probability count" << endl;
     for(auto i: bias_count) {
-        cout << setw(15) << left << ((i.first - 128) / 256.0) << "\t=\t" << i.second << endl;
+        cout << setw(15) << left << (static_cast<float>(i.first - N_SIZE_BY_2) / N_SIZE) << "\t=\t" << i.second << endl;
     }
+
     cout << "*** ***" << endl;
     cout << "bias_mapping" << endl;
     for(auto i: bias_mapping) {
         const auto cnt = count(begin(i.second), end(i.second), '0');
-        cout << setw(16) << i.first << "\t=\t" << cnt << " OR " << ((cnt - 128) / 256.0) << " OR " << i.second << " OR " << endl;
+        cout << setw(16) << i.first << "\t=\t" << cnt << " OR " << (static_cast<float>(cnt - N_SIZE_BY_2) / N_SIZE) << " OR " << i.second << endl;
     }
     return 0;
 }
