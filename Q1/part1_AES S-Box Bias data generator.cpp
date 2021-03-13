@@ -74,14 +74,14 @@ bool next_combination(const Iterator first, Iterator k, const Iterator last) {
 // The Least Significant Bit is at index 0
 // For Big-Endian format, the indexes will look like: {7, 6, 5, 4, 3, 2, 1, 0}
 template<typename T>
-inline bool test_bit(T num, uint_fast8_t bit) {
+inline bool test_bit(T num, uint_fast16_t bit) {
     return (num >> bit) & 1;
 }
 
 // The Most Significant Bit is at index 0
 // For Big-Endian format, the indexes will look like: {0, 1, 2, 3, 4, 5, 6, 7}
 template<typename T>
-inline bool test_bit_back(T num, uint_fast8_t bit, uint_fast8_t num_bits_len = -1) {
+inline bool test_bit_back(T num, uint_fast16_t bit, int_fast16_t num_bits_len = -1) {
     if (num_bits_len == -1) num_bits_len = 8 * sizeof(T);
     return (num >> ((num_bits_len - 1) - bit)) & 1;
 }
@@ -97,7 +97,7 @@ int main() {
     uint8_t aes_sbox[N_SIZE] = {};
     initialize_aes_sbox(aes_sbox);
 
-    bitset <N_SIZE> sbox_input[N_BITS], sbox_output[N_BITS];
+    bitset<N_SIZE> sbox_input[N_BITS], sbox_output[N_BITS];
     for (int32_t i = 0; i < N_SIZE; ++i) {
         for (int32_t j = 0; j < N_BITS; ++j) {
             // cout << i << ", " << j << ", " 
@@ -112,12 +112,12 @@ int main() {
     cout << "AES S-Box Input and Output in binary:" << endl;
     for (int32_t i = 0; i < N_SIZE; ++i) {  // row -> i
         cout << "     ";
-        for (int32_t j = 0; j < N_BITS; ++j) {  // input column -> j
-            cout << ((sbox_input[j].test(i) == 0) ? 0 : 1) << ' ';
+        for (auto &j : sbox_input) {  // input column -> j
+            cout << ((j.test(i) == 0) ? 0 : 1) << ' ';
         }
         cout << "---> ";
-        for (int32_t j = 0; j < N_BITS; ++j) {  // output column -> j
-            cout << ((sbox_output[j].test(i) == 0) ? 0 : 1) << ' ';
+        for (auto &j : sbox_output) {  // output column -> j
+            cout << ((j.test(i) == 0) ? 0 : 1) << ' ';
         }
         cout << endl;
     }
@@ -136,13 +136,13 @@ int main() {
     // Testing whether XOR can be directly used with a column or not ---> Yes, can be used :)
     // cout << (sbox_input[0] ^ sbox_input[1]) << endl;
     int input_idx_combination[N_BITS], output_idx_combination[N_BITS];
-    bitset <N_SIZE> bias_calculated;
+    bitset<N_SIZE> bias_calculated;
 
     // Columns used ---> The bias string of 0's and 1's (i.e. the XOR of all the columns used)
-    map <string, string> bias_mapping;
+    map<string, string> bias_mapping;
 
     // stores the mapping for (Number of Zeros in the XOR of the columns ---> Number of occurrences)
-    map <int32_t, int32_t> bias_count;
+    map<int32_t, int32_t> bias_count;
     for (int32_t i = 1; i <= N_BITS; ++i) {
         for (int32_t j = 1; j <= N_BITS; ++j) {
             // Reset the Index Combination array
@@ -157,7 +157,8 @@ int main() {
             do {
                 do {
                     bias_calculated.reset();
-                    string key = "", value = "";
+                    // REFER: https://stackoverflow.com/questions/17738439/value-and-size-of-an-uninitialized-stdstring-variable-in-c
+                    string key, value;
                     for (int32_t l = 0; l < i; ++l) {
                         bias_calculated ^= sbox_input[input_idx_combination[l]];
                         key += "i" + to_string(input_idx_combination[l]) + " ";
