@@ -73,8 +73,9 @@ using namespace NumericRange;
 template<size_t BITS_LEN>
 struct DynamicBitset {
     // static const unsigned BITS_LEN = 64; // or 32, or more?
-    typedef std::bitset<BITS_LEN> Bits;
-    std::vector<Bits> data;
+    typedef std::bitset <BITS_LEN> Bits;
+    std::vector <Bits> data;
+    size_t data_size_in_bits;
 
     DynamicBitset(size_t len = 0) {
         resize(len);
@@ -94,10 +95,15 @@ struct DynamicBitset {
 
     // make room for len bits
     void resize(size_t len) {
+        data_size_in_bits = len;
         data.resize((len + BITS_LEN - 1) / BITS_LEN);
     }
 
     inline size_t size() const {
+        return data_size_in_bits;
+    }
+
+    inline size_t size_in_mem() const {
         return BITS_LEN * data.size();
     }
 
@@ -115,7 +121,7 @@ struct DynamicBitset {
     auto c_xor(const DynamicBitset<BITS_LEN> &b) const {
         // DynamicBitset<BITS_LEN> res(this->)
         DynamicBitset<BITS_LEN> res(this->size());
-        for(size_t i = 0, i_end = this->data.size(); i < i_end; ++i) {
+        for (size_t i = 0, i_end = this->data.size(); i < i_end; ++i) {
             res.data[i] = this->data[i] ^ b.data[i];
         }
         return res;
@@ -123,12 +129,13 @@ struct DynamicBitset {
 
     void c_xor_equals(const DynamicBitset<BITS_LEN> &b) {
         // DynamicBitset<BITS_LEN> res(this->)
-        for(size_t i = 0, i_end = this->data.size(); i < i_end; ++i) {
+        for (size_t i = 0, i_end = this->data.size(); i < i_end; ++i) {
             data[i] ^= b.data[i];
         }
     }
 
     auto begin() { return data.begin(); }
+
     auto end() { return data.end(); }
 };
 
@@ -224,13 +231,13 @@ uint32_t column_idx_to_uint32_t(uint16_t arr_in[], int arr_in_len, uint16_t arr_
 
 map<uint32_t, float> generate_sbox_bias_mapping(vector <uint32_t> &sbox_arr, const uint32_t N_BITS) {
     // IF (N_BITS is 8), then:
-    const uint32_t N_SIZE = 1 << N_BITS;  // 256
-    const uint32_t N_SIZE_BY_2 = N_SIZE >> 1;  // 128
+    const int32_t N_SIZE = 1 << N_BITS;  // 256
+    const int32_t N_SIZE_BY_2 = N_SIZE >> 1;  // 128
 
     // vector[i] is column "i" of the input/output
     // auto sbox_input = MatrixVector<bool>(N_BITS, N_SIZE, false);
-    vector<DynamicBitset<128>> sbox_input(N_BITS, DynamicBitset<128>(N_SIZE));
-    vector<DynamicBitset<128>> sbox_output(N_BITS, DynamicBitset<128>(N_SIZE));
+    vector <DynamicBitset<128>> sbox_input(N_BITS, DynamicBitset<128>(N_SIZE));
+    vector <DynamicBitset<128>> sbox_output(N_BITS, DynamicBitset<128>(N_SIZE));
 
     // TODO
     for (auto i: urange<int32_t>(N_SIZE)) {
@@ -290,17 +297,25 @@ map<uint32_t, float> generate_sbox_bias_mapping(vector <uint32_t> &sbox_arr, con
                     }
 
                     // we use the value "256 - x" because the probability of 0's is required
-                    uint32_t zeros_count = 0;
-                    for(auto l: bias_calculated) zeros_count += l.count();
-                    const auto bias_value = N_SIZE - zeros_count;
+                    int32_t zeros_count = 0;
+                    for (auto l: bias_calculated) zeros_count += l.size() - l.count();
+                    // This is very important, because, the trailing 0's are also counted in the above loop
+                    zeros_count -= (bias_calculated.size_in_mem() - bias_calculated.size());
 
-                    bias_probability_mapping[column_idx_to_uint32_t(input_idx_combination, i, 
-                                                output_idx_combination, j)] = static_cast<float>(bias_value - N_SIZE_BY_2) / N_SIZE;
+                    const int32_t bias_value = zeros_count;  // this is signed because "this-N_SIZE_BY_2" can be -ve
+
+                    cout << "DEBUG: " << bitset<32>(column_idx_to_uint32_t(input_idx_combination, i,
+                                                                           output_idx_combination, j)) << "N_SIZE = "
+                         << N_SIZE << ", zeros_count = " << zeros_count << ", bias_value = " << bias_value
+                         << ", N_SIZE = " << N_SIZE << endl;
+                    bias_probability_mapping[column_idx_to_uint32_t(input_idx_combination, i,
+                                                                    output_idx_combination, j)] =
+                            static_cast<float>(bias_value - N_SIZE_BY_2) / N_SIZE;
                     bias_count[bias_value] += 1;
                 } while (next_combination(output_idx_combination,
                                           output_idx_combination + j,
                                           output_idx_combination + N_BITS));
-            } while (next_combination(input_idx_combination, 
+            } while (next_combination(input_idx_combination,
                                       input_idx_combination + i,
                                       input_idx_combination + N_BITS));
         }
@@ -315,7 +330,7 @@ map<uint32_t, float> generate_sbox_bias_mapping(vector <uint32_t> &sbox_arr, con
     cout << "*** ***" << endl;
     cout << "bias probability count" << endl;
     for (auto i: bias_probability_mapping) {
-        cout << std::bitset<32>(i.first) << " -> " << setw(15) << left << i.second << endl;
+        cout << std::bitset<32>(i.first) << " -> " << i.second << endl;
     }
 
     return bias_probability_mapping;
@@ -368,7 +383,7 @@ int main() {
     uint32_t sbox_bits;  // S
     cin >> sbox_bits;
     vector <uint32_t> sbox_arr(1 << sbox_bits);
-    for(auto i: urange<int32_t>(sbox_arr.size())) cin >> sbox_arr[i];
+    for (auto i: urange<int32_t>(sbox_arr.size())) cin >> sbox_arr[i];
 
     cout << "number_of_stages = " << number_of_stages << endl;
     // Bias has two definitions
