@@ -92,7 +92,7 @@ inline bool test_bit_back(T num, uint_fast8_t bit, uint_fast8_t num_bits_len=-1)
 
 const int32_t N_BITS = 8;
 const int32_t N_SIZE = 1 << N_BITS;  // 256
-const int32_t N_SIZE_BY_2 = static_cast<float>(N_SIZE >> 1);  // 128
+const int32_t N_SIZE_BY_2 = N_SIZE >> 1;  // 128
 
 int main(){
     // Bias has two definitions
