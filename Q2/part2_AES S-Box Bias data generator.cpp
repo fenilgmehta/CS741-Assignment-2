@@ -9,45 +9,177 @@
 using namespace std;
 
 
-// REFER: https://stackoverflow.com/a/1617797
-template <typename Iterator>
-bool next_combination(const Iterator first, Iterator k, const Iterator last)
-{
-   /* Credits: Mark Nelson http://marknelson.us */
-   if ((first == last) || (first == k) || (last == k))
-      return false;
-   Iterator i1 = first;
-   Iterator i2 = last;
-   ++i1;
-   if (last == i1)
-      return false;
-   i1 = last;
-   --i1;
-   i1 = k;
-   --i2;
-   while (first != i1)
-   {
-      if (*--i1 < *i2)
-      {
-         Iterator j = k;
-         while (!(*i1 < *j)) ++j;
-         std::iter_swap(i1,j);
-         ++i1;
-         ++j;
-         i2 = k;
-         std::rotate(i1,j,last);
-         while (last != j)
-         {
-            ++j;
-            ++i2;
-         }
-         std::rotate(k,i2,last);
-         return true;
-      }
-   }
-   std::rotate(first,k,last);
-   return false;
+// REFER: https://github.com/fenilgmehta/Misc-Programming/blob/master/src/Range%20Iteration.cpp
+namespace NumericRange {
+    template<typename S>
+    struct urange_iterator {
+        typedef std::random_access_iterator_tag iterator_category;
+        typedef S value_type;       // int
+        typedef S difference_type;  // int
+        typedef urange_iterator<S> *pointer;         // urange_iterator<int>*
+        typedef urange_iterator<S> &reference;       // urange_iterator<int>&
+        typedef const urange_iterator<S> &const_reference;       // const urange_iterator<int>&
+
+        S current;
+        const S step;
+
+        inline urange_iterator(const S &f1, const S &s1) : current{f1}, step{s1} {}
+
+        inline bool operator!=(const_reference zz) const { return current < zz.current; }
+
+        inline reference operator++() {
+            current += step;
+            return *this;
+        }
+
+        inline reference operator+=(const difference_type &val) {
+            current += step * val;
+            return *this;
+        }
+
+        inline difference_type operator-(const_reference zz) const {
+            return (current - zz.current + (step - 1)) / step;
+        }
+
+        inline const value_type &operator*() const { return current; }
+
+        inline pointer operator->() { return this; }
+
+        inline reference operator=(const_reference zz) {
+            current = zz.current;
+            return *this;
+        }
+    };
+
+    // This is similar to Python3's "range" function
+    // IMPORTANT: "step" has to always be +ve
+    template<typename T>
+    struct urange {
+        T f1, l1, s1;
+
+        inline explicit urange(T last) : f1{0}, l1{last}, s1{1} {}
+
+        inline explicit urange(T first, T last, T step = 1) : f1{first}, l1{last}, s1{step} {}
+
+        inline urange_iterator<T> begin() const { return urange_iterator<T>(f1, s1); }
+
+        inline const urange_iterator<T> end() const { return urange_iterator<T>(l1, s1); }
+    };
 }
+using namespace NumericRange;
+
+
+// REFER: https://stackoverflow.com/questions/22910563/fast-stdvectorbool-reset
+template<size_t BITS_LEN>
+struct DynamicBitset {
+    // static const unsigned BITS_LEN = 64; // or 32, or more?
+    typedef std::bitset<BITS_LEN> Bits;
+    std::vector<Bits> data;
+
+    DynamicBitset(size_t len = 0) {
+        resize(len);
+    }
+
+    // reset all bits to false
+    void reset() {
+        for (auto it = data.begin(); it != data.end(); ++it) {
+            it->reset(); // we can use the fast bitset::reset :)
+        }
+    }
+
+    // reset the whole bitset belonging to bit i
+    inline void reset_approx(size_t i) {
+        data[i / BITS_LEN].reset();
+    }
+
+    // make room for len bits
+    void resize(size_t len) {
+        data.resize((len + BITS_LEN - 1) / BITS_LEN);
+    }
+
+    inline size_t size() const {
+        return BITS_LEN * data.size();
+    }
+
+    // access a bit
+    typename Bits::reference operator[](size_t i) {
+        size_t k = i / BITS_LEN;
+        return data[k][i % BITS_LEN];
+    }
+
+    bool operator[](size_t i) const {
+        size_t k = i / BITS_LEN;
+        return data[k][i % BITS_LEN];
+    }
+
+    auto c_xor(const DynamicBitset<BITS_LEN> &b) const {
+        // DynamicBitset<BITS_LEN> res(this->)
+        DynamicBitset<BITS_LEN> res(this->size());
+        for(size_t i = 0, i_end = this->data.size(); i < i_end; ++i) {
+            res.data[i] = this->data[i] ^ b.data[i];
+        }
+        return res;
+    }
+
+    void c_xor_equals(const DynamicBitset<BITS_LEN> &b) {
+        // DynamicBitset<BITS_LEN> res(this->)
+        for(size_t i = 0, i_end = this->data.size(); i < i_end; ++i) {
+            data[i] ^= b.data[i];
+        }
+    }
+
+    auto begin() { return data.begin(); }
+    auto end() { return data.end(); }
+};
+
+
+// REFER: https://stackoverflow.com/a/1617797
+template<typename Iterator>
+bool next_combination(const Iterator first, Iterator k, const Iterator last) {
+    /* Credits: Mark Nelson http://marknelson.us */
+    if ((first == last) || (first == k) || (last == k))
+        return false;
+    Iterator i1 = first;
+    Iterator i2 = last;
+    ++i1;
+    if (last == i1)
+        return false;
+    i1 = last;
+    --i1;
+    i1 = k;
+    --i2;
+    while (first != i1) {
+        if (*--i1 < *i2) {
+            Iterator j = k;
+            while (!(*i1 < *j)) ++j;
+            std::iter_swap(i1, j);
+            ++i1;
+            ++j;
+            i2 = k;
+            std::rotate(i1, j, last);
+            while (last != j) {
+                ++j;
+                ++i2;
+            }
+            std::rotate(k, i2, last);
+            return true;
+        }
+    }
+    std::rotate(first, k, last);
+    return false;
+}
+
+
+// REFER: https://github.com/fenilgmehta/Misc-Programming/blob/master/src/Competitive%20Programming%20Template%20(Big).cpp#L64
+template<typename T, typename U>
+std::vector <T> MatrixVector(int n, U v) { return std::vector<T>(n, v); }
+
+template<typename T, class... Args>
+auto MatrixVector(int n, Args... args) {
+    auto val = MatrixVector<T>(args...);
+    return std::vector<decltype(val)>(n, move(val));
+}
+
 
 // The Least Significant Bit is at index 0
 // For Big-Endian format, the indexes will look like: {7, 6, 5, 4, 3, 2, 1, 0}
@@ -58,98 +190,87 @@ inline bool test_bit(T num, uint_fast8_t bit) {
 
 // The Most Significant Bit is at index 0
 // For Big-Endian format, the indexes will look like: {0, 1, 2, 3, 4, 5, 6, 7}
+// ASSUMPTION: bit <= num_bits_len
 template<typename T>
-inline bool test_bit_back(T num, uint_fast8_t bit, uint_fast8_t num_bits_len=-1) {
+inline bool test_bit_back(T num, uint_fast8_t bit, uint_fast8_t num_bits_len = -1) {
     if (num_bits_len == -1) num_bits_len = 8 * sizeof(T);
     return (num >> ((num_bits_len - 1) - bit)) & 1;
 }
 
-// REFER: https://github.com/fenilgmehta/Misc-Programming/blob/master/src/Range%20Iteration.cpp
-namespace NumericRange{
-    template<typename S>
-    struct range_iterator{
-        typedef std::random_access_iterator_tag iterator_category;
-        typedef S value_type;       // int
-        typedef S difference_type;  // int
-        typedef range_iterator<S>* pointer;         // range_iterator<int>*
-        typedef range_iterator<S>& reference;       // range_iterator<int>&
-        typedef const range_iterator<S>& const_reference;       // const range_iterator<int>&
-        
-        S current;
-        const S step;
-
-        inline range_iterator(const S &f1, const S &s1): current{f1}, step{s1} {}
-        inline bool operator!=(const_reference zz) const {return current < zz.current;}
-        inline reference operator++(){ current += step; return *this; }  // current = (current <= l) ? current : l;
-        inline reference operator+=(const difference_type& val) { current+=step*val; return *this; }
-        inline difference_type operator-(const_reference zz) const { return (current-zz.current + (step-1))/step; }
-        inline const value_type& operator*() const { return current; }
-        inline pointer operator->() { return this; }
-        inline reference operator=(const_reference zz) { current = zz.current; return *this; }
-    };
-
-    template<typename T>
-    struct urange{
-        T f1, l1, s1;
-        inline explicit urange(T last): f1{0}, l1{last}, s1{1} {}
-        inline explicit urange(T first, T last, T step=1): f1{first}, l1{last}, s1{step} {}
-        inline range_iterator<T> begin() const { return range_iterator<T>(f1, s1); }
-        inline const range_iterator<T> end() const { return range_iterator<T>(l1, s1); }
-    };
+template<typename T>
+inline void set_bit(T &num, uint_fast8_t bit) {
+    num |= (1 << bit);
 }
-using namespace NumericRange;
 
-// REFER: https://github.com/fenilgmehta/Misc-Programming/blob/master/src/Competitive%20Programming%20Template%20(Big).cpp#L64
-template<typename T, typename U> std::vector<T> MatrixVector(int n, U v){ return std::vector<T>(n, v);}
-template<typename T, class... Args> auto MatrixVector(int n, Args... args){auto val = MatrixVector<T>(args...); return std::vector<decltype(val)>(n, move(val));}
+// ASSUMPTION: bit <= num_bits_len
+template<typename T>
+inline void set_bit_back(T &num, uint_fast8_t bit, uint_fast8_t num_bits_len = -1) {
+    if (num_bits_len == -1) num_bits_len = 8 * sizeof(T);
+    num |= (1 << (num_bits_len - 1 - bit));
+}
 
-map<uint32_t, float> generate_sbox_bias_mapping(vector<uint32_t> &sbox_arr, const int N_BITS) {
+
+uint32_t column_idx_to_uint32_t(uint16_t arr_in[], int arr_in_len, uint16_t arr_out[], int arr_out_len) {
+    uint32_t result = 0;
+    for (auto i: urange<int32_t>(arr_in_len)) {
+        set_bit_back(result, arr_in[i], 32);
+    }
+    for (auto i: urange<int32_t>(arr_out_len)) {
+        set_bit_back(result, arr_out[i], 16);
+    }
+    return result;
+}
+
+
+map<uint32_t, float> generate_sbox_bias_mapping(vector <uint32_t> &sbox_arr, const uint32_t N_BITS) {
+    // IF (N_BITS is 8), then:
+    const uint32_t N_SIZE = 1 << N_BITS;  // 256
+    const uint32_t N_SIZE_BY_2 = N_SIZE >> 1;  // 128
+
     // vector[i] is column "i" of the input/output
-    auto sbox_input = MatrixVector<bool>(N_BITS, N_SIZE, false);
-    auto sbox_output = MatrixVector<bool>(N_BITS, N_SIZE, false);
+    // auto sbox_input = MatrixVector<bool>(N_BITS, N_SIZE, false);
+    vector<DynamicBitset<128>> sbox_input(N_BITS, DynamicBitset<128>(N_SIZE));
+    vector<DynamicBitset<128>> sbox_output(N_BITS, DynamicBitset<128>(N_SIZE));
 
     // TODO
-    for(int32_t i = 0; i < N_SIZE; ++i) {
-        for(int32_t j = 0; j < N_BITS; ++j) {
+    for (auto i: urange<int32_t>(N_SIZE)) {
+        for (auto j: urange<int32_t>(N_BITS)) {
             // cout << i << ", " << j << ", " 
             //      << static_cast<int32_t>(sbox_arr[i]) << ", " 
             //      << static_cast<int32_t>(test_bit_back(i, j, N_BITS)) << ", " 
             //      << static_cast<int32_t>(test_bit_back(sbox_arr[i], j, N_BITS)) << endl;
-            sbox_input[j].set(i, test_bit_back(i, j, N_BITS));
-            sbox_output[j].set(i, test_bit_back(sbox_arr[i], j, N_BITS));
-
-            // sbox_input[j].set(i, test_bit_back(i, j, N_BITS));
-            // sbox_output[j].set(i, test_bit_back(sbox_arr[i], j, N_BITS));
+            sbox_input[j][i] = test_bit_back(i, j, N_BITS);
+            sbox_output[j][i] = test_bit_back(sbox_arr[i], j, N_BITS);
         }
     }
 
-    cout << "AES S-Box Input and Output in binary:" << endl;
-    for(int32_t i = 0; i < N_SIZE; ++i) {  // row -> i
+    cout << "S-Box Input and Output in binary:" << endl;
+    for (auto i: urange<int32_t>(N_SIZE)) {  // row -> i
         cout << "     ";
-        for(int32_t j = 0; j < N_BITS; ++j) {  // input column -> j
-            cout << ((sbox_input[j].test(i)==0) ? 0 : 1) << ' ';
+        for (auto j: urange<int32_t>(N_BITS)) {  // input column -> j
+            cout << ((sbox_input[j][i] == 0) ? 0 : 1) << ' ';
         }
         cout << "---> ";
-        for(int32_t j = 0; j < N_BITS; ++j) {  // output column -> j
-            cout << ((sbox_output[j].test(i)==0) ? 0 : 1) << ' ';
+        for (auto j: urange<int32_t>(N_BITS)) {  // output column -> j
+            cout << ((sbox_output[j][i] == 0) ? 0 : 1) << ' ';
         }
         cout << endl;
     }
-    
+
     // Testing whether XOR can be directly used with a column or not ---> Yes, can be used :)
     // cout << (sbox_input[0] ^ sbox_input[1]) << endl;
-    int input_idx_combination[N_BITS], output_idx_combination[N_BITS];
-    bitset<N_SIZE> bias_calculated;
+    uint16_t input_idx_combination[N_BITS], output_idx_combination[N_BITS];
+    DynamicBitset<128> bias_calculated(N_SIZE);
 
-    // Columns used ---> The bias string of 0's and 1's (i.e. the XOR of all the columns used)
-    map<string, string> bias_mapping;
-    
+    // Columns used ---> (probability of 0) - 1/2
+    map<uint32_t, float> bias_probability_mapping;
+
     // stores the mapping for (Number of Zeros in the XOR of the columns ---> Number of occurrences)
-    map<int32_t, int32_t> bias_count;
-    for(int32_t i = 1; i <= N_BITS; ++i) {
-        for(int32_t j = 1; j <= N_BITS; ++j) {
+    map <int32_t, int32_t> bias_count;
+    for (auto i: urange<int32_t>(1, N_BITS + 1)) {
+        for (auto j: urange<int32_t>(1, N_BITS + 1)) {
             // Reset the Index Combination array
-            for(int32_t k = 0; k < N_BITS; ++k) {
+            for (auto k: urange<int32_t>(N_BITS)) {
                 input_idx_combination[k] = output_idx_combination[k] = k;
             }
 
@@ -160,57 +281,53 @@ map<uint32_t, float> generate_sbox_bias_mapping(vector<uint32_t> &sbox_arr, cons
             do {
                 do {
                     bias_calculated.reset();
-                    string key="", value="";
-                    for(int32_t l = 0; l < i; ++l)  {
-                        bias_calculated ^= sbox_input[input_idx_combination[l]];
-                        key+="i" + to_string(input_idx_combination[l]) + " ";
-                        // "i" represents input column number
+
+                    for (auto l: urange<int32_t>(i)) {
+                        bias_calculated.c_xor_equals(sbox_input[input_idx_combination[l]]);
                     }
-                    key+=", ";
-                    for(int32_t l = 0; l < j; ++l){
-                        bias_calculated ^= sbox_output[output_idx_combination[l]];
-                        key+="o" + to_string(output_idx_combination[l]) + " ";
-                        // "o" represents output column number
+                    for (auto l: urange<int32_t>(j)) {
+                        bias_calculated.c_xor_equals(sbox_output[output_idx_combination[l]]);
                     }
 
                     // we use the value "256 - x" because the probability of 0's is required
-                    const auto bias_value = N_SIZE - bias_calculated.count();
+                    uint32_t zeros_count = 0;
+                    for(auto l: bias_calculated) zeros_count += l.count();
+                    const auto bias_value = N_SIZE - zeros_count;
+
+                    bias_probability_mapping[column_idx_to_uint32_t(input_idx_combination, i, 
+                                                output_idx_combination, j)] = static_cast<float>(bias_value - N_SIZE_BY_2) / N_SIZE;
                     bias_count[bias_value] += 1;
-                    bias_mapping[key] = bias_calculated.to_string();
-                } while(next_combination(output_idx_combination, output_idx_combination+j, output_idx_combination+N_BITS));
-            } while (next_combination(input_idx_combination, input_idx_combination+i, input_idx_combination+N_BITS));
+                } while (next_combination(output_idx_combination,
+                                          output_idx_combination + j,
+                                          output_idx_combination + N_BITS));
+            } while (next_combination(input_idx_combination, 
+                                      input_idx_combination + i,
+                                      input_idx_combination + N_BITS));
         }
     }
 
     cout << "*** ***" << endl;
     cout << "bias_count" << endl;
-    for(auto i: bias_count) {
+    for (auto i: bias_count) {
         cout << setw(5) << i.first << "\t=\t" << i.second << endl;
     }
 
     cout << "*** ***" << endl;
     cout << "bias probability count" << endl;
-    for(auto i: bias_count) {
-        cout << setw(15) << left << (static_cast<float>(i.first - N_SIZE_BY_2) / N_SIZE) << "\t=\t" << i.second << endl;
+    for (auto i: bias_probability_mapping) {
+        cout << std::bitset<32>(i.first) << " -> " << setw(15) << left << i.second << endl;
     }
 
-    cout << "*** ***" << endl;
-    cout << "bias_mapping" << endl;
-    for(auto i: bias_mapping) {
-        const auto cnt = count(begin(i.second), end(i.second), '0');
-        cout << setw(16) << i.first << "\t=\t" << cnt << " OR " << (static_cast<float>(cnt - N_SIZE_BY_2) / N_SIZE) << " OR " << i.second << endl;
-    }
+    return bias_probability_mapping;
 }
 
-const int32_t N_BITS = 8;
-const int32_t N_SIZE = 1 << N_BITS;  // 256
-const int32_t N_SIZE_BY_2 = static_cast<float>(N_SIZE >> 1);  // 128
 
-// For understanding the concept:
-//     REFER: http://www.csc.kth.se/utbildning/kth/kurser/DD2448/krypto11/handouts/lec04.pdf
-//     REFER: https://en.wikipedia.org/wiki/Substitution%E2%80%93permutation_network
-int main(){
+int main() {
 /*
+    For understanding the concept:
+        REFER: http://www.csc.kth.se/utbildning/kth/kurser/DD2448/krypto11/handouts/lec04.pdf
+        REFER: https://en.wikipedia.org/wiki/Substitution%E2%80%93permutation_network
+
     CONVENTION Followed:
         All indexing starts from 0
 
@@ -243,15 +360,17 @@ int main(){
 
 */
     uint32_t number_of_stages, size_of_plain_text;  // T, N
-    cin>>number_of_stages >> size_of_plain_text;
-    
-    vector<uint32_t> permutation_arr(size_of_plain_text);
-    for(auto i: urange<int32_t>(size_of_plain_text)) cin>>permutation_arr[i];
+    cin >> number_of_stages >> size_of_plain_text;
+
+    vector <uint32_t> permutation_arr(size_of_plain_text);
+    for (auto i: urange<int32_t>(size_of_plain_text)) cin >> permutation_arr[i];
 
     uint32_t sbox_bits;  // S
-    cin>>sbox_bits;
-    vector<uint32_t> sbox_arr(1 << sbox_bits);
-    
+    cin >> sbox_bits;
+    vector <uint32_t> sbox_arr(1 << sbox_bits);
+    for(auto i: urange<int32_t>(sbox_arr.size())) cin >> sbox_arr[i];
+
+    cout << "number_of_stages = " << number_of_stages << endl;
     // Bias has two definitions
     // 1. Bias = (Probability of getting 0) - 1/2
     // 2. Bias = Number of occurrences of 0 in the XOR of input and output columns
@@ -259,22 +378,21 @@ int main(){
     // Fox "sbox_bits = 16", size of "sbox_mapper = pow(pow(2,n)-1, 2) = 4294836225"
     //     higher 16 bits = input columns
     //     lower 16 bits = output columns
-    map<uint32_t, float> sbox_bias_mapper = generate_sbox_bias_mapping();
-
+    map<uint32_t, float> sbox_bias_mapper = generate_sbox_bias_mapping(sbox_arr, sbox_bits);
 
     // TODO: reuse/remove the below things
-    uint8_t aes_sbox[N_SIZE] = {};
+    // uint8_t aes_sbox[N_SIZE] = {};
 
 
-    cout << "AES S-Box is:" << endl;
-    cout << hex;
-    for(int32_t i = 0; i < 16; ++i) {
-        for(int32_t j = 0; j < 16; ++j) {
-            cout << static_cast<uint32_t>(aes_sbox[i * 16 + j]) << "\t";
-        }
-        cout << endl;
-    }
-    cout << dec;
+    // cout << "AES S-Box is:" << endl;
+    // cout << hex;
+    // for (int32_t i = 0; i < 16; ++i) {
+    //     for (int32_t j = 0; j < 16; ++j) {
+    //         cout << static_cast<uint32_t>(aes_sbox[i * 16 + j]) << "\t";
+    //     }
+    //     cout << endl;
+    // }
+    // cout << dec;
 
     return 0;
 }
