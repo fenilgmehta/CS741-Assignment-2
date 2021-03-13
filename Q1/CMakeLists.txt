@@ -6,8 +6,7 @@ project("Q1")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_VERBOSE_MAKEFILE on)
 
-file(GLOB sourceFILES src/*.cpp src/*.c)
-#file(GLOB sourceFILES *.cpp *.c)
+file(GLOB sourceFILES *.cpp *.c)
 
 FOREACH (sourceFile ${sourceFILES})
     get_filename_component(sourceFile_Path ${sourceFile} PATH)
