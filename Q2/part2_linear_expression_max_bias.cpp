@@ -348,13 +348,13 @@ map<uint32_t, float> generate_sbox_bias_mapping(const vector<uint32_t> &sbox_arr
     }
 
     // DEBUG
-    cout << "--------------------------------------------------" << endl;
-    cout << "bias_count" << endl;
-    for (auto i: bias_count) {
-        cout << setw(5) << left << i.first << " OR "
-             << setw(10) << left << (static_cast<double>(i.first - (1 << (N_BITS - 1))) / (1 << N_BITS))
-             << "\t=\t" << i.second << endl;
-    }
+    // cout << "--------------------------------------------------" << endl;
+    // cout << "bias_count" << endl;
+    // for (auto i: bias_count) {
+    //     cout << setw(5) << left << i.first << " OR "
+    //          << setw(10) << left << (static_cast<double>(i.first - (1 << (N_BITS - 1))) / (1 << N_BITS))
+    //          << "\t=\t" << i.second << endl;
+    // }
 
     // DEBUG
     // cout << "--------------------------------------------------" << endl;
@@ -363,7 +363,7 @@ map<uint32_t, float> generate_sbox_bias_mapping(const vector<uint32_t> &sbox_arr
     //     cout << std::bitset<32>(i.first) << " -> " << i.second << endl;
     // }
 
-    cout << "--------------------------------------------------" << endl;
+    // cout << "--------------------------------------------------" << endl;
 
     return bias_probability_mapping;
 }
