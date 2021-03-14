@@ -88,7 +88,7 @@ void find_path(string inputToLevel, string ans, int level, float totalBias_into2
 
                 if (thisOutputCombinationBias_into2 == 0.0) {
                     // More Optimisation can be done here
-                    // k += (2 << (plainTextSize - i - SboxSize)) - 1;
+                    // k += (1 << (plainTextSize - i - SboxSize)) - 1;
                     break;  // TODO: try a different output combination
                 }
             }
@@ -152,3 +152,17 @@ int main() {
     cout << endl;
     return 0;
 }
+
+/*
+This S-Box was given by sir in lecture 13 - slide 13
+Sbox Input ---> Sbox Output
+ 0 0
+ 1 2
+ 2 1
+ 3 4
+ 4 7
+ 5 5
+ 6 6
+ 7 3
+
+ */
