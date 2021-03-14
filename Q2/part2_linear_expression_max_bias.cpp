@@ -5,6 +5,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <cmath>
 #include "MyDebugger.hpp"
 
 using namespace std;
@@ -265,19 +266,19 @@ map<uint32_t, float> generate_sbox_bias_mapping(const vector<uint32_t> &sbox_arr
     }
 
     // // DEBUG
-    cout << "--------------------------------------------------" << endl;
-    cout << "S-Box Input and Output in binary:" << endl;
-    for (auto i: urange<int32_t>(N_SIZE)) {  // Y = row -> i
-        cout << "     ";
-        for (auto j: urange<int32_t>(N_BITS)) {  // X = input column -> j
-            cout << ((sbox_input[j][i] == 0) ? 0 : 1) << ' ';
-        }
-        cout << "---> ";
-        for (auto j: urange<int32_t>(N_BITS)) {  // X = output column -> j
-            cout << ((sbox_output[j][i] == 0) ? 0 : 1) << ' ';
-        }
-        cout << endl;
-    }
+    // cout << "--------------------------------------------------" << endl;
+    // cout << "S-Box Input and Output in binary:" << endl;
+    // for (auto i: urange<int32_t>(N_SIZE)) {  // Y = row -> i
+    //     cout << "     ";
+    //     for (auto j: urange<int32_t>(N_BITS)) {  // X = input column -> j
+    //         cout << ((sbox_input[j][i] == 0) ? 0 : 1) << ' ';
+    //     }
+    //     cout << "---> ";
+    //     for (auto j: urange<int32_t>(N_BITS)) {  // X = output column -> j
+    //         cout << ((sbox_output[j][i] == 0) ? 0 : 1) << ' ';
+    //     }
+    //     cout << endl;
+    // }
 
     // Testing whether XOR can be directly used with a column or not ---> Yes, can be used :)
     uint16_t input_idx_combination[N_BITS], output_idx_combination[N_BITS];
@@ -350,15 +351,18 @@ map<uint32_t, float> generate_sbox_bias_mapping(const vector<uint32_t> &sbox_arr
     cout << "--------------------------------------------------" << endl;
     cout << "bias_count" << endl;
     for (auto i: bias_count) {
-        cout << setw(5) << i.first << "\t=\t" << i.second << endl;
+        cout << setw(5) << left << i.first << " OR "
+             << setw(10) << left << (static_cast<double>(i.first - (1 << (N_BITS - 1))) / (1 << N_BITS))
+             << "\t=\t" << i.second << endl;
     }
 
     // DEBUG
-    cout << "--------------------------------------------------" << endl;
-    cout << "bias probability count" << endl;
-    for (auto i: bias_probability_mapping) {
-        cout << std::bitset<32>(i.first) << " -> " << i.second << endl;
-    }
+    // cout << "--------------------------------------------------" << endl;
+    // cout << "bias probability count" << endl;
+    // for (auto i: bias_probability_mapping) {
+    //     cout << std::bitset<32>(i.first) << " -> " << i.second << endl;
+    // }
+
     cout << "--------------------------------------------------" << endl;
 
     return bias_probability_mapping;
@@ -431,6 +435,7 @@ struct MaxBiasedPath {
     void find_path(const int32_t level, const double currentBias_into2) {
         // a bitset filled with 1's from index range [0, numSboxBits)
         static bitset<64> SBOX_SIZE_ONES((static_cast<uint64_t>(1) << numSboxBits) - 1);
+        static uint64_t SBOX_ONES = (static_cast<uint64_t>(1) << numSboxBits) - 1;
 
         // OPTIMIZATION
         if (abs(currentBias_into2) <= abs(maxBias_into2)) return;
@@ -452,12 +457,26 @@ struct MaxBiasedPath {
 
         // "k" starts from 1 because for bias calculation, we have
         // to take "at least one output"
-        for (uint64_t k = 1; k < totalInputOutputCombinations; k++) {
+        int32_t input_sbox_count = 0;
+        int32_t input_first_valid_sbox_idx = -1;
+        uint64_t inputVal = result[level].first.to_ullong();
+        for (int32_t itemp = 0; inputVal > 0; ++itemp) {
+            if((inputVal & SBOX_ONES) && (input_first_valid_sbox_idx == (-1))) input_first_valid_sbox_idx = itemp;
+            ++input_sbox_count;
+            inputVal >>= numSboxBits;
+        }
+        // uint64_t k_incr = 1;
+        // if(input_first_valid_sbox_idx != (-1)) {
+        //     k_incr = static_cast<uint64_t>(1) << (input_first_valid_sbox_idx * numSboxBits);
+        // }
+        const uint64_t k_end = (static_cast<uint64_t>(1) << (input_sbox_count * numSboxBits)) - 1;
+        for (uint64_t k = 1; k < k_end; ++k) {
             bitset<64> outputOfLevel(k);  // k=1 ---> column 0 of Output is to be used (for level 0, P0 will be used)
             double thisOutputCombinationBias_into2 = currentBias_into2;
 
             bool flag1, flag2;
-            for (auto i: urange<uint64_t>(0, numPlainTextBits, numSboxBits)) {
+            uint64_t i = 0;
+            for (;i < numPlainTextBits; i+=numSboxBits) {
                 // The current S-Box range is [i, i + numSboxBits)
 
                 // The below two bitset<64> represent the columns of the S-Box
@@ -489,10 +508,15 @@ struct MaxBiasedPath {
                 }
             }
 
-            if ((flag1 == false && flag2 == true) || (flag1 == true && flag2 == false) ||
-                isZero(thisOutputCombinationBias_into2)) {
+            if (flag1 == false && flag2 == true) {
+                auto ktemp = ((k >> i) & SBOX_ONES) << i;
+                k ^= ktemp;
+                k += (static_cast<uint64_t>(1) << (i+numSboxBits));
+                --k;
+                continue;
+            } else if ((flag1 == true && flag2 == false) || isZero(thisOutputCombinationBias_into2)) {
                 // More Optimisation can be done here
-                // k += (1 << (plainTextSize - i - SboxSize)) - 1;
+                // k += (1 << (plainTextSize - i * SboxSize)) - 1;
                 continue;
             }
 
@@ -571,7 +595,16 @@ int main() {
     vector<uint32_t> sbox_arr(1 << sbox_bits);
     for (auto i: urange<int32_t>(sbox_arr.size())) cin >> sbox_arr[i];
 
-    cout << "number_of_stages = " << number_of_stages << endl;
+    cout << "Number of Stages/Levels = " << number_of_stages << endl;
+    cout << "Plain Text Bits = " << size_of_plain_text << endl;
+    cout << "S-Box bits = " << sbox_bits << endl;
+    cout << "Permutation Array = { ";
+    for(auto i: permutation_arr) cout << i << ", ";
+    cout << "}" << endl;
+    cout << "S-Box Array = { ";
+    for(auto i: sbox_arr) cout << i << ", ";
+    cout << "}" << endl;
+
     // Bias has two definitions
     // 1. Bias = (Probability of getting 0) - 1/2
     // 2. Bias = Number of occurrences of 0 in the XOR of input and output columns
@@ -604,4 +637,26 @@ const int Permutation[] = {0, 3, 6, 1, 4, 7, 2, 5, 8};
 0 3 6 1 4 7 2 5 8
 3
 0 2 1 4 7 5 6 3
+
+Example 1
+1
+4
+0 1 2 3
+2
+2 1 3 0
+
+Example 2
+2
+4
+0 2 1 3
+2
+2 1 3 0
+
+Example 3
+2
+4
+0 2 1 3
+2
+2 1 3 0
+
 */
