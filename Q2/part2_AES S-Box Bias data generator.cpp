@@ -386,7 +386,7 @@ int main() {
         9
         0 3 6 1 4 7 2 5 8   ## 0 mapped to 0, 1 mapped to 3, 2 mapped to 6 ...
         3
-        0 2 4 6 3 1 7 8     ## 0->0, 1->2, 2->4, ... substitution
+        0 2 4 6 3 1 7 5     ## 0->0, 1->2, 2->4, ... substitution
 
 */
     int32_t number_of_stages, size_of_plain_text;  // T, N
