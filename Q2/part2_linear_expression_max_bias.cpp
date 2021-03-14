@@ -221,24 +221,25 @@ inline void set_bit_back(T &num, uint_fast16_t bit, int_fast16_t num_bits_len = 
 uint32_t column_idx_to_uint32_t(uint16_t arr_in[], int arr_in_len, uint16_t arr_out[], int arr_out_len) {
     uint32_t result = 0;
     for (auto i: urange<int32_t>(arr_in_len)) {
-        set_bit_back(result, arr_in[i], 32);
+        set_bit(result, 16 + arr_in[i]);
     }
     for (auto i: urange<int32_t>(arr_out_len)) {
-        set_bit_back(result, arr_out[i], 16);
+        set_bit(result, arr_out[i]);
     }
     return result;
 }
 
-uint32_t column_idx_to_uint32_t(bitset<64> b, int32_t idx_start, int32_t idx_end) {
-    uint64_t result = (b >> idx_start).to_ullong();
-    result &= (static_cast<uint64_t>(1) << (idx_end - idx_start + 1)) - 1;
-    return static_cast<uint32_t>(result);
-}
+// uint32_t column_idx_to_uint32_t(bitset<64> b, int32_t idx_start, int32_t idx_end) {
+//     uint64_t result = (b >> idx_start).to_ullong();
+//     result &= (static_cast<uint64_t>(1) << (idx_end - idx_start + 1)) - 1;
+//     return static_cast<uint32_t>(result);
+// }
 
-uint32_t column_idx_to_uint32_t_len(bitset<64> b, int32_t idx_start, int32_t len_bits) {
-    uint64_t result = (b >> idx_start).to_ullong();
-    result &= (static_cast<uint64_t>(1) << len_bits) - 1;
-    return static_cast<uint32_t>(result);
+uint32_t column_idx_to_uint32_t_len(bitset<64> b_in, int32_t idx_start_in, bitset<64> b_out, int32_t idx_start_out,
+                                    int32_t len_bits) {
+    uint64_t result_in = (b_in >> idx_start_in).to_ullong() & ((static_cast<uint64_t>(1) << len_bits) - 1);
+    uint64_t result_out = (b_out >> idx_start_out).to_ullong() & ((static_cast<uint64_t>(1) << len_bits) - 1);
+    return static_cast<uint32_t>((result_in << 16) | result_out);
 }
 
 /* N_BITS = sbox_bits */
@@ -363,14 +364,21 @@ map<uint32_t, float> generate_sbox_bias_mapping(const vector<uint32_t> &sbox_arr
     return bias_probability_mapping;
 }
 
+map<uint32_t, float> SBOX_BIAS_MAPPER;
+
+// REFER: https://stackoverflow.com/questions/9542391/float-double-equality-with-exact-zero
+// REFER: https://stackoverflow.com/questions/18260213/how-to-test-if-a-double-is-zero/
+bool isZero(double value, double threshold = 0.00000001) {
+    return -threshold <= value && value <= threshold;
+}
 
 struct MaxBiasedPath {
     int32_t numStages, numPlainTextBits, numSboxBits, totalInputOutputCombinations;
-    vector<int32_t> arrPermutation, arrSbox;
+    vector<uint32_t> arrPermutation, arrSbox;
 
     // Each element of the vector is of size numPlainTextBits
     // pair(A, B) ---> A (Input Columns), B (Output Columns)
-    vector<pair<DynamicBitset<64>, DynamicBitset<64>>> result;
+    vector<pair<bitset<64>, bitset<64>>> result;
     double maxBias_into2;
     double finalMaxBias;
     string finalAns;
@@ -380,25 +388,57 @@ struct MaxBiasedPath {
             arrPermutation(mNumPlainTextBits), arrSbox(1 << mNumSboxBits),
             result(), maxBias_into2{0.0}, finalMaxBias{0.0}, finalAns(),
             totalInputOutputCombinations{1 << mNumPlainTextBits} {
-        result.reserve(20);
+        result.resize(mNumStages);
     }
 
     string generate_ans_string() {
         string ans;
-        ans += " ";
-        // TODO
+
+        for (auto i: urange<int32_t>(result.size())) {
+            auto &input = result[i].first;
+            // ans += "   " + to_string(i) + "i{";
+            if (i == 0) {
+                for (auto k: urange<int32_t>(input.size())) {
+                    if (input[k]) {
+                        ans += "P(" + to_string(k) + ") ";
+                    }
+                }
+                for (auto k: urange<int32_t>(input.size())) {
+                    if (input[k]) {
+                        ans += "K(0," + to_string(k) + ") ";
+                    }
+                }
+            } else {
+                for (auto k: urange<int32_t>(input.size())) {
+                    if (input[k]) {
+                        ans += "K(" + to_string(i) + "," + to_string(k) + ") ";
+                    }
+                }
+            }
+            // ans += "}   ";
+        }
+
+        auto &lastOutput = result[result.size() - 1].second;
+        for (auto k: urange<int32_t>(lastOutput.size())) {
+            if (lastOutput[k])
+                ans += "C" + to_string(k) + " ";
+        }
+
         return ans;
     }
 
     // IMPORTANT: fill arrPermutation and arrSbox before calling this function
-    void find_path(string inputToLevel, string ans, const int32_t level, double currentBias_into2) {
+    void find_path(const int32_t level, const double currentBias_into2) {
+        // a bitset filled with 1's from index range [0, numSboxBits)
+        static bitset<64> SBOX_SIZE_ONES((static_cast<uint64_t>(1) << numSboxBits) - 1);
+
         // base case
-        if (level > numStages) {
-            if (abs(currentBias_into2) > abs(maxBias_into2)) {
+        if (level >= numStages) {
+            if (abs(currentBias_into2) >= abs(maxBias_into2)) {
                 maxBias_into2 = currentBias_into2;
 
                 finalMaxBias = maxBias_into2 / 2;
-                finalAns = ans;  // Add cipher bits here
+                finalAns = generate_ans_string();
 
                 // DEBUG
                 cout << endl;
@@ -407,105 +447,74 @@ struct MaxBiasedPath {
             return;
         }
 
-        bool flag1, flag2;
-
-        for (int i = 0; i < numPlainTextBits; i++) {
-            if (inputToLevel[i] == '1') {
-                if (level == numStages) {
-                    ans += "C(" + to_string(i) + ") ";
-                } else {
-                    ans += "K(" + to_string(level) + "," + to_string(i) + ") ";
-                }
-            }
-        }
-
         // "k" starts from 1 because for bias calculation, we have
         // to take "at least one output"
-        for (int k = 1; k < totalInputOutputCombinations; k++) {
+        for (uint64_t k = 1; k < totalInputOutputCombinations; k++) {
+            bitset<64> outputOfLevel(k);  // k=1 ---> column 0 of Output is to be used (for level 0, P0 will be used)
             double thisOutputCombinationBias_into2 = currentBias_into2;
-            string outputOfLevel = bitset<numPlainTextBits>(k).to_string(); // to binary
 
-            for (int i = 0; i < numPlainTextBits; i += numSboxBits) {
-                string inputToS_box = inputToLevel.substr(i, numSboxBits);
-                string outputOfS_box = outputOfLevel.substr(i, numSboxBits);
+            bool flag1, flag2;
+            for (auto i: urange<uint64_t>(0, numPlainTextBits, numSboxBits)) {
+                // The current S-Box range is [i, i + numSboxBits)
 
-                string xorValue = "00000000";  // bin(48)='0b110000', bin(49)='0b110001'
-                flag1 = false;
-                flag2 = false;
+                // The below two bitset<64> represent the columns of the S-Box
+                bitset<64> inputToSbox = (result[level].first >> i) & SBOX_SIZE_ONES;
+                bitset<64> outputOfSbox = (outputOfLevel >> i) & SBOX_SIZE_ONES;
 
-                for (int j = 0; j < numSboxBits; j++) {
-                    if (inputToS_box[j] == '1') {
-                        for (int l = 0; l < 8; l++) {
-                            xorValue[l] = (xorValue[l] == arrSbox[j][l]) ? '0' : '1';
-                        }
-                        flag1 = true;
-                    }
-                }
-
-                for (int j = 0; j < numSboxBits; j++) {
-                    if (outputOfS_box[j] == '1') {
-                        for (int l = 0; l < 8; l++) {
-                            xorValue[l] = (xorValue[l] == arrSbox[numSboxBits + j][l]) ? '0' : '1';
-                        }
-                        flag2 = true;
-                    }
-                }
+                flag1 = (inputToSbox.to_ullong() != 0);
+                flag2 = (outputOfSbox.to_ullong() != 0);
 
                 if ((flag1 == false && flag2 == true) || (flag1 == true && flag2 == false))
                     break;
 
-                if (flag1 == true && flag2 == true) {
-                    int sum = 0;
-                    for (int j = 0; j < 8; j++) {
-                        if (xorValue[j] == '0')
-                            sum++;
-                    }
+                if (flag1 && flag2) {
+                    double currentBias = SBOX_BIAS_MAPPER[
+                            column_idx_to_uint32_t_len(
+                                    inputToSbox, 0,
+                                    outputOfSbox, 0,
+                                    numSboxBits)
+                    ];
 
-                    double bias = (sum / 8.0) - 0.5;
-                    thisOutputCombinationBias_into2 *= (bias * 2);
+                    thisOutputCombinationBias_into2 *= (2 * currentBias);
 
-                    if (thisOutputCombinationBias_into2 == 0.0) {
-                        // More Optimisation can be done here
+                    // if (thisOutputCombinationBias_into2 == 0.0)
+                    if (isZero(thisOutputCombinationBias_into2)) {
+                        // TODO: More Optimisation can be done here
                         // k += (2 << (plainTextSize - i - SboxSize)) - 1;
                         break;  // TODO: try a different output combination
                     }
                 }
             }
 
-            if ((flag1 == false && flag2 == true) || (flag1 == true && flag2 == false) || thisOutputCombinationBias_into2 == 0) {
+            if ((flag1 == false && flag2 == true) || (flag1 == true && flag2 == false) ||
+                isZero(thisOutputCombinationBias_into2)) {
                 // More Optimisation can be done here
                 // k += (2 << (plainTextSize - i - SboxSize)) - 1;
                 continue;
             }
 
+            result[level].second = outputOfLevel;
             if (level < numStages - 1) {
-                string temp = outputOfLevel;
-                for (int i = 0; i < numPlainTextBits; i++) {
+                bitset<64> temp = outputOfLevel;
+                for (auto i: urange<int32_t>(numPlainTextBits)) {
                     outputOfLevel[i] = temp[arrPermutation[i]];
                 }
             }
+            result[level + 1].first = outputOfLevel;
 
             // recursive case
-            find_path(outputOfLevel, ans, level + 1, thisOutputCombinationBias_into2);
+            find_path(level + 1, thisOutputCombinationBias_into2);
         }
     }
 
     void find_path() {
         for (auto i: urange<int32_t>(1, totalInputOutputCombinations)) {
-            string inputToLevel = bitset<64>(i).to_string(); // to binary
+            bitset<64> inputToLevel(i); // to binary
             // db(inputToLevel)
             cout << "\r" << "Progress = " << inputToLevel << " , " << i << " / " << totalInputOutputCombinations;
 
-            string ans;  // by default string is "" if uninitialized
-            for (int j = 0; j < numPlainTextBits; j++) {
-                if (inputToLevel[j] == '1') {
-                    ans += "P(" + to_string(j) + ") ";
-                }
-            }
-            // db(ans);
-
-            float totalBias = 1;
-            find_path(inputToLevel, ans, 0, totalBias);
+            result[0].first = inputToLevel;
+            find_path(0, 1.0);
         }
     }
 };
@@ -551,7 +560,7 @@ int main() {
     int32_t number_of_stages, size_of_plain_text;  // T, N
     cin >> number_of_stages >> size_of_plain_text;
 
-    vector<int32_t> permutation_arr(size_of_plain_text);
+    vector<uint32_t> permutation_arr(size_of_plain_text);
     for (auto i: urange<int32_t>(size_of_plain_text)) cin >> permutation_arr[i];
 
     int32_t sbox_bits;  // S
@@ -567,11 +576,12 @@ int main() {
     // Fox "sbox_bits = 16", size of "sbox_mapper = pow(pow(2,n)-1, 2) = 4294836225"
     //     higher 16 bits = input columns
     //     lower 16 bits = output columns
-    map<uint32_t, float> sbox_bias_mapper = generate_sbox_bias_mapping(sbox_arr, sbox_bits);
+    SBOX_BIAS_MAPPER = generate_sbox_bias_mapping(sbox_arr, sbox_bits);
 
     struct MaxBiasedPath maxBiasedPath(number_of_stages, size_of_plain_text, sbox_bits);
-    // TODO: fill the vectors
-    maxBiasedPath.find_path()
+    maxBiasedPath.arrPermutation = permutation_arr;
+    maxBiasedPath.arrSbox = sbox_arr;
+    maxBiasedPath.find_path();
 
     // cout << "AES S-Box is:" << endl;
     // cout << hex;
@@ -585,3 +595,17 @@ int main() {
 
     return 0;
 }
+
+/*
+const int SboxSize = 3;
+const int totalLevels = 3;
+const int plainTextSize = 9;
+const int totalInputOutputCombinations = 1 << plainTextSize;  // 2 << 9 = 1024
+const int Permutation[] = {0, 3, 6, 1, 4, 7, 2, 5, 8};
+
+3
+9
+0 3 6 1 4 7 2 5 8
+3
+0 2 1 4 7 5 6 3
+*/
