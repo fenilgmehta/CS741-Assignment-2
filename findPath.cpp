@@ -6,7 +6,7 @@ const int SboxSize = 3;
 const int totalLevels = 3;
 const int plainTextSize = 9;
 const int totalInputCombination = 2 << plainTextSize;  // 2 << 9 = 1024
-const vector<int> Permutation = {0, 3, 6, 1, 4, 7, 2, 5, 8};
+const int Permutation[] = {0, 3, 6, 1, 4, 7, 2, 5, 8};
 
 map<int, string> S_box;
 
@@ -15,7 +15,7 @@ void find_path(string inputToLevel, string ans, int level, float totalBias) {
     if (level >= totalLevels)
         return;
 
-    string inputToS_box;
+    string inputToS_box;  // TODO: uninitialized - but still used. Probably this should be = ans
     string outputOfLevel;
     string outputOfS_box;
     string result;
@@ -23,10 +23,12 @@ void find_path(string inputToLevel, string ans, int level, float totalBias) {
 
     for (int i = 0; i < plainTextSize; i++) {
         if (inputToS_box[i] == '1') {
-            result += "K" + to_string(level) + to_string(i + 1) + " ";
+            result += "K(" + to_string(level) + "," + to_string(i + 1) + ") ";
         }
     }
 
+    // "k" starts from 1 because for bias calculation, we have
+    // to take "at least one input" and "at least one output"
     for (int k = 1; k < totalInputCombination; k++) {
 
         outputOfLevel = bitset<plainTextSize>(k).to_string(); //to binary
@@ -38,6 +40,7 @@ void find_path(string inputToLevel, string ans, int level, float totalBias) {
             string xorValue = "00000000";
             flag1 = false;
             flag2 = false;
+
             for (int j = 0; j < SboxSize; j++) {
                 if (inputToS_box[j] == '1') {
                     for (int l = 0; l < 8; l++) {
@@ -48,7 +51,6 @@ void find_path(string inputToLevel, string ans, int level, float totalBias) {
             }
 
             outputOfS_box = outputOfLevel.substr(i, SboxSize);
-
 
             for (int j = 0; j < SboxSize; j++) {
                 if (outputOfS_box[j] == '1') {
@@ -100,12 +102,12 @@ void find_path(string inputToLevel, string ans, int level, float totalBias) {
 int main() {
 
     //S_box shown in lecture ppt
-    S_box[0] = "00001111";
-    S_box[1] = "00110011";
-    S_box[2] = "01010101";
-    S_box[3] = "00011110";
-    S_box[4] = "01001011";
-    S_box[5] = "00101101";
+    S_box[0] = "00001111";  // This is column 0 of input
+    S_box[1] = "00110011";  //         column 1 of input
+    S_box[2] = "01010101";  //         column 2 of input
+    S_box[3] = "00011110";  // This is column 0 of output
+    S_box[4] = "01001011";  //         column 1 of output
+    S_box[5] = "00101101";  //         column 2 of output
 
     for (int i = 1; i < totalInputCombination; i++) {
         string inputToLevel = bitset<plainTextSize>(i).to_string(); //to binary
@@ -121,7 +123,7 @@ int main() {
 
         float totalBias = 1;
         find_path(inputToLevel, ans, 0, totalBias);
-        //cout << ans << endl;
+        // cout << ans << endl;
     }
 
     return 0;
