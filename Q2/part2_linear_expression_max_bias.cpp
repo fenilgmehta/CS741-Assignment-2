@@ -421,7 +421,7 @@ struct MaxBiasedPath {
         auto &lastOutput = result[result.size() - 1].second;
         for (auto k: urange<int32_t>(lastOutput.size())) {
             if (lastOutput[k])
-                ans += "C" + to_string(k) + " ";
+                ans += "C(" + to_string(k) + ") ";
         }
 
         return ans;
@@ -432,9 +432,12 @@ struct MaxBiasedPath {
         // a bitset filled with 1's from index range [0, numSboxBits)
         static bitset<64> SBOX_SIZE_ONES((static_cast<uint64_t>(1) << numSboxBits) - 1);
 
+        // OPTIMIZATION
+        if (abs(currentBias_into2) <= abs(maxBias_into2)) return;
+
         // base case
         if (level >= numStages) {
-            if (abs(currentBias_into2) >= abs(maxBias_into2)) {
+            if (abs(currentBias_into2) > abs(maxBias_into2)) {
                 maxBias_into2 = currentBias_into2;
 
                 finalMaxBias = maxBias_into2 / 2;
@@ -481,7 +484,7 @@ struct MaxBiasedPath {
                     if (isZero(thisOutputCombinationBias_into2)) {
                         // TODO: More Optimisation can be done here
                         // k += (2 << (plainTextSize - i - SboxSize)) - 1;
-                        break;  // TODO: try a different output combination
+                        break;
                     }
                 }
             }
@@ -489,7 +492,7 @@ struct MaxBiasedPath {
             if ((flag1 == false && flag2 == true) || (flag1 == true && flag2 == false) ||
                 isZero(thisOutputCombinationBias_into2)) {
                 // More Optimisation can be done here
-                // k += (2 << (plainTextSize - i - SboxSize)) - 1;
+                // k += (1 << (plainTextSize - i - SboxSize)) - 1;
                 continue;
             }
 
@@ -582,17 +585,10 @@ int main() {
     maxBiasedPath.arrPermutation = permutation_arr;
     maxBiasedPath.arrSbox = sbox_arr;
     maxBiasedPath.find_path();
+    cout << maxBiasedPath.finalMaxBias << endl;
+    cout << maxBiasedPath.finalAns << endl;
 
-    // cout << "AES S-Box is:" << endl;
-    // cout << hex;
-    // for (int32_t i = 0; i < 16; ++i) {
-    //     for (int32_t j = 0; j < 16; ++j) {
-    //         cout << static_cast<uint32_t>(aes_sbox[i * 16 + j]) << "\t";
-    //     }
-    //     cout << endl;
-    // }
-    // cout << dec;
-
+    cout << endl;
     return 0;
 }
 
