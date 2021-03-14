@@ -515,8 +515,10 @@ struct MaxBiasedPath {
                 --k;
                 continue;
             } else if ((flag1 == true && flag2 == false) || isZero(thisOutputCombinationBias_into2)) {
-                // More Optimisation can be done here
-                // k += (1 << (plainTextSize - i * SboxSize)) - 1;
+                // NOT SURE:
+                //     More Optimisation can be done here
+                //     k += (1 << (plainTextSize - i * SboxSize)) - 1;
+                k += (static_cast<uint64_t>(1) << i);
                 continue;
             }
 
@@ -538,7 +540,7 @@ struct MaxBiasedPath {
         for (auto i: urange<int32_t>(1, totalInputOutputCombinations)) {
             bitset<64> inputToLevel(i); // to binary
             // db(inputToLevel)
-            cout << "\r" << "Progress = " << inputToLevel << " , " << i << " / " << totalInputOutputCombinations;
+            cout << "\r\r\r\r" << "Progress = " << inputToLevel << " , " << i << " / " << totalInputOutputCombinations;
 
             result[0].first = inputToLevel;
             find_path(0, 1.0);
