@@ -347,7 +347,7 @@ map<uint32_t, float> generate_sbox_bias_mapping(const vector<uint32_t> &sbox_arr
         }
     }
 
-    // DEBUG
+    // // DEBUG
     // cout << "--------------------------------------------------" << endl;
     // cout << "bias_count" << endl;
     // for (auto i: bias_count) {
@@ -356,7 +356,7 @@ map<uint32_t, float> generate_sbox_bias_mapping(const vector<uint32_t> &sbox_arr
     //          << "\t=\t" << i.second << endl;
     // }
 
-    // DEBUG
+    // // DEBUG
     // cout << "--------------------------------------------------" << endl;
     // cout << "bias probability count" << endl;
     // for (auto i: bias_probability_mapping) {
@@ -514,11 +514,17 @@ struct MaxBiasedPath {
                 k += (static_cast<uint64_t>(1) << (i+numSboxBits));
                 --k;
                 continue;
-            } else if ((flag1 == true && flag2 == false) || isZero(thisOutputCombinationBias_into2)) {
+            } else if (flag1 == true && flag2 == false) {
+                k += (static_cast<uint64_t>(1) << i);
+                continue;
+            } else if (isZero(thisOutputCombinationBias_into2)) {
                 // NOT SURE:
                 //     More Optimisation can be done here
                 //     k += (1 << (plainTextSize - i * SboxSize)) - 1;
-                k += (static_cast<uint64_t>(1) << i);
+
+                // The below optimization is giving wrong answer
+                // There is something wrong with it
+                // k += (static_cast<uint64_t>(1) << i);
                 continue;
             }
 
@@ -540,7 +546,7 @@ struct MaxBiasedPath {
         for (auto i: urange<int32_t>(1, totalInputOutputCombinations)) {
             bitset<64> inputToLevel(i); // to binary
             // db(inputToLevel)
-            cout << "\r\r\r\r" << "Progress = " << inputToLevel << " , " << i << " / " << totalInputOutputCombinations;
+            cout << "\rProgress = " << inputToLevel << " , " << i << " / " << totalInputOutputCombinations;
 
             result[0].first = inputToLevel;
             find_path(0, 1.0);
@@ -620,8 +626,9 @@ int main() {
     maxBiasedPath.arrPermutation = permutation_arr;
     maxBiasedPath.arrSbox = sbox_arr;
     maxBiasedPath.find_path();
-    cout << maxBiasedPath.finalMaxBias << endl;
-    cout << maxBiasedPath.finalAns << endl;
+    cout << endl;
+    cout << "maxBiasedPath.finalMaxBias = " << maxBiasedPath.finalMaxBias << endl;
+    cout << "maxBiasedPath.finalAns = " << maxBiasedPath.finalAns << endl;
 
     cout << endl;
     return 0;
@@ -660,5 +667,12 @@ Example 3
 0 2 1 3
 2
 2 1 3 0
+
+Example 4 - output for this should be -0.5 / 0.5
+8
+9
+0 3 6 1 4 7 2 5 8
+3
+5 7 1 3 4 6 0 2
 
 */
